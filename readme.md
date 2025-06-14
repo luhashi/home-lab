@@ -4,7 +4,7 @@ This guide documents my personal home lab setup, following the exact installatio
 
 ## 🖥️ Prerequisites
 
-- A server or PC running Ubuntu with XFCE
+- A server or PC running Ubuntu (XFCE desktop environment only needed for Magic Mirror display)
 - Internet connection
 - Basic terminal knowledge
 
@@ -158,6 +158,12 @@ This guide documents my personal home lab setup, following the exact installatio
 
 ## 🪞 Magic Mirror Setup (Optional)
 
+### Important Note about GUI Requirements
+- The XFCE desktop environment (or any other GUI) is only needed if you want to display the Magic Mirror interface directly on the server
+- For server-only operation (e.g., accessing the interface from another device), no GUI is required
+
+### Installation
+
 1. Install dependencies:
    ```bash
    curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
@@ -176,11 +182,20 @@ This guide documents my personal home lab setup, following the exact installatio
    nano config/config.js
    ```
 
-4. Start MagicMirror:
-   ```bash
-   cd ~/MagicMirror
-   npm run start
-   ```
+### Running Magic Mirror
+
+#### With GUI (for direct display):
+```bash
+cd ~/MagicMirror
+npm run start
+```
+
+#### Server-Only Mode (no GUI required):
+```bash
+cd ~/MagicMirror
+npm run server
+```
+- Access the interface from any device on your network at: `http://your-server-ip:8080`
 
 ## 🔄 Maintenance
 
