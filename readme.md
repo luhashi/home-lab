@@ -64,7 +64,7 @@ graph TD
 | **Servidor Secundário** | Dual Core (Low Power) | Host Debian para serviços 24/7 de baixa demanda. |
 | **Gateway/Firewall** | UniFi Gateway Lite | Roteador, Firewall, VPN WireGuard. |
 | **Access Point** | UniFi AP7 Lite | Wi-Fi 7, rede de convidados e gerenciamento de segurança. |
-| **Switch** | (Não especificado) | Conectividade da rede local. |
+| **Switch**  | Conectividade da rede local. |
 
 ## ⚙️ Software e Virtualização
 
@@ -80,13 +80,13 @@ graph TD
 
 ### Servidor Principal (VMs no Proxmox)
 
-#### 虚拟机: `vm-docker-main`
+#### VM-1: `vm-docker-main`
 - **Portainer Server**: Ponto central de gerenciamento dos contêineres.
 - **Ollama**: Execução de modelos de linguagem (LLMs) localmente.
 - **Open WebUI**: Interface web para interagir com os modelos do Ollama.
 - **LittleLLM**: Gerenciamento de chaves de API para serviços de LLM.
 
-#### 虚拟机: `vm-docker-network`
+#### VM-2: `vm-docker-network`
 - **AdGuard Home**: Bloqueador de anúncios e rastreadores a nível de rede (DNS sinkhole).
 - **Portainer Agent**: Permite que o Portainer Server gerencie este host.
 
