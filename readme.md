@@ -1,216 +1,127 @@
-# 🏠 Home Lab Setup Guide
+# 🏠 Home Lab 2.0 - Arquitetura e Documentação
 
-This guide documents my personal home lab setup, following the exact installation order I used to set up my environment.
+Este repositório documenta a arquitetura e configuração do meu Home Lab pessoal (v2.0). O projeto é construído sobre um hipervisor Proxmox, com serviços distribuídos em contêineres Docker, gerenciado centralizadamente pelo Portainer e com uma infraestrutura de rede baseada em UniFi.
 
-## 🖥️ Prerequisites
+O objetivo principal é o auto-hospedagem de serviços, experimentação com IA/LLMs locais e automação residencial com Home Assistant.
 
-- A server or PC running Ubuntu with XFCE
-- Internet connection
-- Basic terminal knowledge
+## Diagrama da Arquitetura
 
-## 🔄 System Setup
+```mermaid
+graph TD
+    subgraph "Internet"
+        ISP_Modem("ISP Modem (Bridge Mode)")
+    end
 
-### 1. Initial Ubuntu Setup
+    subgraph "Networking - UniFi Stack"
+        UGW["UniFi Gateway Lite (Router/Firewall/VPN)"]
+        SW["Network Switch"]
+        AP["UniFi AP7 Lite (Wi-Fi 7)"]
+    end
 
-1. Install Ubuntu Server with XFCE desktop environment
-2. Update and upgrade system packages:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-3. Install essential tools:
-   ```bash
-   sudo apt install -y git curl wget nano
-   ```
+    subgraph "Servidor Principal (Proxmox VE)"
+        PVE("Proxmox Host")
+        subgraph "VM: vm-docker-main"
+            DockerMain["Docker"]
+            PortainerServer("Portainer Server")
+            Ollama("Ollama")
+            OpenWebUI("Open WebUI")
+            LittleLLM("LittleLLM")
+        end
+        subgraph "VM: vm-docker-network"
+            DockerNet["Docker"]
+            AdGuard("AdGuard Home")
+            AgentNet("Portainer Agent")
+        end
+    end
 
-### 2. Install Docker
+    subgraph "Servidor Secundário (Low Power)"
+        DebianServer("Physical Debian Host")
+        DockerLP["Docker"]
+        HA("Home Assistant")
+        UniFiCtrl("UniFi Controller")
+        AgentLP("Portainer Agent")
+    end
 
-1. Install required packages:
-   ```bash
-   sudo apt-get install -y \
-       apt-transport-https \
-       ca-certificates \
-       curl \
-       gnupg \
-       lsb-release
-   ```
+    ISP_Modem -- "WAN" --> UGW
+    UGW -- "LAN" --> SW
+    SW --> PVE
+    SW --> DebianServer
+    SW --> AP
 
-2. Add Docker's official GPG key:
-   ```bash
-   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-   ```
+    PVE --> vm-docker-main
+    PVE --> vm-docker-network
 
-3. Set up the stable repository:
-   ```bash
-   echo \
-     "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-     $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-   ```
-
-4. Install Docker Engine:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-   ```
-
-5. Add your user to the docker group:
-   ```bash
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
-
-6. Verify installation:
-   ```bash
-   docker --version
-   docker run hello-world
-   ```
-
-## 🏠 Home Assistant Installation
-
-1. Install required dependencies:
-   ```bash
-   sudo apt-get install -y \
-       apparmor \
-       jq \
-       network-manager \
-       socat \
-       software-properties-common
-   ```
-
-2. Install OS Agent:
-   ```bash
-   wget https://github.com/home-assistant/os-agent/releases/download/1.6.0/os-agent_1.6.0_linux_x86_64.deb
-   sudo dpkg -i os-agent_1.6.0_linux_x86_64.deb
-   ```
-
-3. Install Home Assistant Supervisor:
-   ```bash
-   wget https://github.com/home-assistant/supervised-installer/releases/latest/download/homeassistant-supervised.deb
-   sudo dpkg -i homeassistant-supervised.deb
-   ```
-
-4. Access Home Assistant at: `http://your-server-ip:8123`
-
-## 🤖 LittleLLM Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/BerriAI/littlellm
-   cd littlellm
-   ```
-
-2. Create and edit the .env file:
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
-
-3. Generate secure random strings and update:
-   ```
-   LITELLM_MASTER_KEY="sk-$(openssl rand -hex 16)"
-   LITELLM_SALT_KEY="sk-$(openssl rand -hex 16)"
-   ```
-
-4. Start the services:
-   ```bash
-   sudo docker compose up -d
-   ```
-
-5. Access the dashboard at: `http://your-server-ip:3000`
-   - Username: admin
-   - Password: Your LITELLM_MASTER_KEY without the "sk-" prefix
-
-## 🦙 Ollama Setup
-
-1. Pull and run Ollama container:
-   ```bash
-   docker run -d \
-     --name ollama \
-     -p 11434:11434 \
-     -v ollama:/root/.ollama \
-     --restart always \
-     ollama/ollama
-   ```
-
-2. Pull a model (example with llama2):
-   ```bash
-   docker exec ollama ollama pull llama2
-   ```
-
-3. Verify the installation:
-   ```bash
-   docker exec ollama ollama list
-   ```
-
-## 🌐 Open WebUI Setup
-
-1. Run Open WebUI container:
-   ```bash
-   docker run -d \
-     -p 3000:8080 \
-     -v open-webui:/app/backend/data \
-     -e OLLAMA_BASE_URL=http://your-server-ip:11434 \
-     --name open-webui \
-     --restart always \
-     ghcr.io/open-webui/open-webui:main
-   ```
-
-2. Access Open WebUI at: `http://your-server-ip:3000`
-
-## 🪞 Magic Mirror Setup (Optional)
-
-1. Install dependencies:
-   ```bash
-   curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-   sudo apt install -y nodejs
-   ```
-
-2. Install MagicMirror:
-   ```bash
-   bash -c "$(curl -sL https://raw.githubusercontent.com/MichMich/MagicMirror/master/installers/raspberry.sh)"
-   ```
-
-3. Configure MagicMirror:
-   ```bash
-   cd ~/MagicMirror
-   cp config/config.js.sample config/config.js
-   nano config/config.js
-   ```
-
-4. Start MagicMirror:
-   ```bash
-   cd ~/MagicMirror
-   npm run start
-   ```
-
-## 🔄 Maintenance
-
-### Update All Services
-
-```bash
-# Update Docker containers
-cd ~/littlellm
-docker compose pull
-docker compose up -d
-
-docker pull ollama/ollama:latest
-docker pull ghcr.io/open-webui/open-webui:main
-
-# Restart all services
-docker restart ollama open-webui
+    PortainerServer -- "Gerencia" --> DockerMain
+    PortainerServer -- "Gerencia" --> DockerNet
+    PortainerServer -- "Gerencia" --> DockerLP
 ```
 
-### Backup Configuration
+## 🛠️ Hardware
+
+| Componente | Especificação | Função |
+|---|---|---|
+| **Servidor Principal** | 12 Cores, 12 GB RAM | Host Proxmox para VMs de serviços principais. |
+| **Servidor Secundário** | Dual Core (Low Power) | Host Debian para serviços 24/7 de baixa demanda. |
+| **Gateway/Firewall** | UniFi Gateway Lite | Roteador, Firewall, VPN WireGuard. |
+| **Access Point** | UniFi AP7 Lite | Wi-Fi 7, rede de convidados e gerenciamento de segurança. |
+| **Switch** | (Não especificado) | Conectividade da rede local. |
+
+## ⚙️ Software e Virtualização
+
+| Tecnologia | Descrição |
+|---|---|
+| **Hipervisor** | **Proxmox VE** | Instalado no servidor principal para gerenciar máquinas virtuais. |
+| **Sistema Operacional** | **Debian** | SO base para o servidor secundário e para todas as VMs. |
+| **Conteinerização** | **Docker** | Utilizado em todos os hosts para isolar e executar os serviços. |
+| **Gerenciamento** | **Portainer** | Gerencia de forma centralizada os 3 ambientes Docker (2 VMs + 1 host físico). |
+| **Rede** | **UniFi Network** | O UniFi Controller gerencia o Gateway e o AP, provendo controle total da rede. |
+
+## 📦 Serviços Hospedados
+
+### Servidor Principal (VMs no Proxmox)
+
+#### 虚拟机: `vm-docker-main`
+- **Portainer Server**: Ponto central de gerenciamento dos contêineres.
+- **Ollama**: Execução de modelos de linguagem (LLMs) localmente.
+- **Open WebUI**: Interface web para interagir com os modelos do Ollama.
+- **LittleLLM**: Gerenciamento de chaves de API para serviços de LLM.
+
+#### 虚拟机: `vm-docker-network`
+- **AdGuard Home**: Bloqueador de anúncios e rastreadores a nível de rede (DNS sinkhole).
+- **Portainer Agent**: Permite que o Portainer Server gerencie este host.
+
+### Servidor Secundário (Físico, Debian)
+- **Home Assistant**: Orquestrador central para automação residencial.
+- **UniFi Controller**: Software para gerenciamento dos dispositivos de rede UniFi.
+- **Portainer Agent**: Permite que o Portainer Server gerencie este host.
+
+## 🚀 Instalação e Configuração
+
+A configuração deste ambiente é feita em múltiplas etapas, começando pela instalação do Proxmox e configuração da rede UniFi. Os serviços em Docker são implantados usando o Portainer (Stacks) ou a linha de comando.
+
+Este repositório contém alguns artefatos que podem ser usados como referência:
+
+- **`docker-compose.yml`**: Um exemplo de como subir os serviços de IA (Ollama, OpenWebUI, etc.) em um único host. Pode ser usado como base para um Stack no Portainer.
+- **`setup.sh`**: Um script de instalação legado, útil para consulta de dependências e comandos de instalação para serviços específicos em um ambiente Debian.
+- **`manage_llm.sh`**: Um script de exemplo para gerenciar instalações de Ollama e LittleLLM.
+
+## 🔄 Manutenção e Backup
 
 ```bash
 # Create backup directory
 mkdir -p ~/backups/$(date +%Y%m%d)
 
-# Backup Docker volumes
-docker run --rm -v ~/backups/$(date +%Y%m%d):/backup -v ollama:/source busybox tar czf /backup/ollama_backup_$(date +%Y%m%d).tar.gz -C /source .
-docker run --rm -v ~/backups/$(date +%Y%m%d):/backup -v open-webui:/source busybox tar czf /backup/openwebui_backup_$(date +%Y%m%d).tar.gz -C /source .
+# Backup de volumes do Docker (exemplo para o volume do ollama)
+# Este comando deve ser executado no host Docker relevante
+docker run --rm \
+  -v ollama-data:/source \
+  -v ~/backups/$(date +%Y%m%d):/backup \
+  busybox tar czf /backup/ollama_backup_$(date +%Y%m%d).tar.gz -C /source .
 
-# Backup Home Assistant configuration
-sudo tar czf ~/backups/$(date +%Y%m%d)/homeassistant_backup_$(date +%Y%m%d).tar.gz /usr/share/hassio/homeassistant/
+# Backup da configuração do Home Assistant (se estiver usando a instalação Supervised)
+sudo tar czf \
+  ~/backups/$(date +%Y%m%d)/homeassistant_backup_$(date +%Y%m%d).tar.gz \
+  /usr/share/hassio/homeassistant/
 ```
 
 ## 📝 Notes
