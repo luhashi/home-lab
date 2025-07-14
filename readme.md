@@ -93,10 +93,7 @@ The network is divided into four distinct subnets, each with specific security p
 | **Switch** | Network backbone | Local network connectivity |
 *For a more detailed overview, see the [Hardware & Network Documentation](./docs/hardware.md).*
 
-### Hardware
 
-* **AI Node (`mercury`):** A Microsoft Surface Pro 4 serving as an experimentation server for AI/ML models.
-* **Core Services Node (`jupiter`):** A generic dual-core notebook running critical, always-on services.
 
 ### Software & Virtualization Stack
 
