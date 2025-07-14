@@ -1,24 +1,37 @@
-🌐 Network Architecture
-Overview
-This document outlines the architecture of a professional-grade home lab network. The design philosophy has evolved from a simple flat network to a robust, secure, and highly-managed infrastructure. It leverages enterprise-level concepts like virtualization, network segmentation (VLANs), and centralized management to create a powerful and flexible environment for self-hosting and experimentation.
+# 🚀 Home Lab Network Architecture
+![Proxmox](https://img.shields.io/badge/Proxmox-E52F5A?style=for-the-badge&logo=proxmox&logoColor=white)
+![Debian](https://img.shields.io/badge/Debian-A81D33?style=for-the-badge&logo=debian&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![UniFi](https://img.shields.io/badge/UniFi-0056B3?style=for-the-badge&logo=ubiquiti&logoColor=white)
 
-The core of the network is built on the Ubiquiti UniFi platform, providing granular control over traffic, while services are logically separated and managed across two physical servers using Proxmox VE and Docker.
+This document details the network architecture of my home lab. The project has evolved from a simple flat network into a robust and secure infrastructure, adopting professional-grade concepts to ensure performance and simplified management.
 
-✨ Key Architectural Advantages
-This new design provides significant improvements in security, performance, and manageability:
+## 🎯 Design Philosophy
 
-Virtualization with Proxmox: Workloads are isolated into dedicated Virtual Machines (e.g., vm-docker-main for AI, vm-docker-network for network services). This prevents a single application failure from impacting the entire system and allows for efficient resource allocation and snapshot-based backups.
+The network philosophy is based on three pillars:
 
-Centralized Container Management: Portainer provides a single web interface to manage all three Docker environments across two physical machines. This simplifies deployment, monitoring, and maintenance of containerized services.
+* **Security by Isolation:** Implementing network segmentation (VLANs) to isolate different types of traffic, minimizing the attack surface and protecting critical services.
+* **Centralized Control:** Utilizing the UniFi platform to manage all network hardware from a single interface, allowing for unified firewall policy enforcement and traffic monitoring.
+* **High Performance:** Employing dedicated network hardware to ensure stable connectivity, low latency, and capacity for future expansions.
 
-Dedicated UniFi Network Stack: Replacing the ISP router with a UniFi Gateway, Switch, and AP provides full control over the network. This enables advanced firewalling, secure VPN access via WireGuard, and the implementation of VLANs.
+---
 
-Purpose-Built Servers: The architecture uses a powerful Primary Server for resource-intensive tasks like running AI models and a Low-Power Secondary Server for essential 24/7 services like Home Assistant and the UniFi Controller, optimizing performance and energy consumption.
+## ✨ Key Architectural Advantages
 
-Diagram
-This diagram illustrates the multi-server architecture and the flow of management and network traffic.
+This new design offers significant improvements in security, performance, and manageability:
 
+* **Virtualization with Proxmox:** Workloads are isolated into dedicated Virtual Machines. This prevents a single application failure from impacting the entire system and allows for efficient resource allocation.
+* **Centralized Management with Portainer:** A single web interface manages all three Docker environments, simplifying the deployment, monitoring, and maintenance of containerized services.
+* **Dedicated UniFi Network Stack:** Replacing the ISP router with a UniFi Gateway, Switch, and AP provides full control, enabling advanced firewalling, secure VPN, and VLAN implementation.
+* **Purpose-Built Servers:** The architecture uses a powerful server for heavy tasks (AI) and a low-power server for essential 24/7 services (home automation and network control), optimizing the performance-to-cost ratio.
 
+---
+
+## 🏛️ Architecture Diagram
+
+The diagram below illustrates the multi-server topology and network traffic flow.
+
+```mermaid
 graph TD
     subgraph "Internet"
         ISP_Modem("ISP Modem (Bridge Mode)")
@@ -64,10 +77,9 @@ graph TD
 
     PortainerServer -- "Manages" --> DockerMain
     PortainerServer -- "Manages" --> DockerNet
-    PortainerServer -- "Manages" --> AgentLP
-    
-🔒 Network Segmentation & Security
-The network is divided into four distinct VLANs, each with a specific purpose and strict firewall rules to control access and enhance security.
+    PortainerServer -- "Manages" --> DockerLP
+🔒 Network Segmentation & Security (VLANs)
+The network is divided into four distinct VLANs, each with a specific purpose and strict firewall policies to control access and enhance security.
 
 Network Name
 
@@ -112,7 +124,7 @@ For IoT devices. Isolated, cannot initiate contact with other VLANs. Can be acce
 🚦 Example Traffic Flow
 Here’s how a request from a trusted device to a self-hosted service works in this architecture:
 
-A user on their laptop (connected to the "Cacau" Wi-Fi network, VLAN 20) opens a browser to the Open WebUI address.
+A user on their laptop (connected to the "Cacau" Wi-Fi network, VLAN 20) accesses the Open WebUI address.
 
 The request travels from the laptop to the UniFi AP.
 
@@ -120,17 +132,17 @@ The AP tags the traffic for VLAN 20 and sends it to the UniFi Switch.
 
 The Switch forwards the request to the UniFi Gateway.
 
-The Gateway's firewall rules check if VLAN 20 is allowed to access the IP of the OpenWebUI service on the "Prod" network (VLAN 10). The rule allows this specific traffic.
+The Gateway's firewall rules check if VLAN 20 is allowed to access the IP of the OpenWebUI service on the "Prod" network (VLAN 10). The rule permits this specific traffic.
 
 The Gateway routes the request to the Proxmox Host, which passes it to the vm-docker-main VM.
 
-The Docker container for Open WebUI receives the request and serves the webpage back along the same path.
+The Open WebUI Docker container receives the request and serves the webpage back along the same path.
 
-🚀 Future Improvements
-With the foundational architecture in place, future enhancements will focus on automation and deeper observability:
+🚀 Future Roadmap
+With the foundational architecture established, future improvements will focus on automation and observability:
 
-High Availability (HA): Deploy a second instance of AdGuard Home on the secondary server and configure them for HA to eliminate DNS as a single point of failure.
+[ ] High Availability (HA): Implement a second AdGuard Home instance on the secondary server and configure them for HA to eliminate DNS as a single point of failure.
 
-Infrastructure as Code (IaC): Use Ansible to automate the setup and configuration of new VMs and Docker hosts, ensuring consistency and repeatability.
+[ ] Infrastructure as Code (IaC): Use Ansible to automate the setup and configuration of new VMs and Docker hosts, ensuring consistency and repeatability.
 
-Monitoring & Logging: Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for in-depth monitoring and alerting.
+[ ] Monitoring & Logging: Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for detailed monitoring and alerting.
