@@ -1,61 +1,106 @@
 version: '3.8'
 
+networks:
+  prod:
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: 192.168.1.0/27
+  cacau:
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: 192.168.1.32/27
+
 services:
-  # Ollama - Serves local language models
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer-server
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - prod
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer_data:/data
     ports:
-      - "11434:11434"
+      - "8000:8000"
+      - "9443:9443"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.local`)"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    networks:
+      - prod
+      - cacau
     volumes:
       - ollama_data:/root/.ollama
-    restart: always
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
 
-  # Open WebUI - Chat interface to interact with Ollama
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
-    ports:
-      # Mapped to port 8080 to avoid conflict with the LiteLLM UI
-      - "8080:8080"
-    environment:
-      # Points to the ollama service within the Docker network
-      - OLLAMA_BASE_URL=http://ollama:11434
+    restart: unless-stopped
+    networks:
+      - prod
+      - cacau
     volumes:
       - open_webui_data:/app/backend/data
-    restart: always
+    ports:
+      - "3000:8080"
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434/api
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     depends_on:
       - ollama
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webui.rule=Host(`ai.local`)"
+      - "traefik.http.services.webui.loadbalancer.server.port=8080"
 
-  # LiteLLM Proxy - Manages API keys and routes requests
-  litellm-proxy:
-    image: ghcr.io/berriai/litellm:main-latest
-    container_name: litellm-proxy
+  littlellm:
+    image: ghcr.io/berriai/littlellm:latest
+    container_name: littlellm
+    restart: unless-stopped
+    networks:
+      - prod
+    volumes:
+      - ./config:/app/config
+      - ./keys:/app/keys:ro
     ports:
-      - "4000:4000"
+      - "8000:8000"
     environment:
-      # Loads keys from the .env file
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
-    command: ["--port", "4000", "--host", "0.0.0.0", "--ui_port", "3000"]
-    restart: always
-    depends_on:
-      - ollama
+      - PORT=8000
+      - CONFIG_PATH=/app/config/config.yaml
+      - MASTER_KEY=${LITTLELLM_MASTER_KEY:-}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.littlellm.rule=Host(`llm.local`)"
+      - "traefik.http.services.littlellm.loadbalancer.server.port=8000"
 
-  # LiteLLM UI - Dashboard to view logs and usage
-  litellm-ui:
-    image: ghcr.io/berriai/litellm-ui:main
-    container_name: litellm-ui
-    ports:
-      - "3000:3000"
-    environment:
-      # Points to the LiteLLM proxy service
-      - LITELLM_PROXY_URL=http://litellm-proxy:4000
-    restart: always
-    depends_on:
-      - litellm-proxy
-
-# Define volumes to persist data
 volumes:
+  portainer_data:
   ollama_data:
   open_webui_data:

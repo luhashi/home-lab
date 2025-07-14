@@ -1,89 +1,136 @@
-# 🌐 Network Architecture
+🌐 Network Architecture
+Overview
+This document outlines the architecture of a professional-grade home lab network. The design philosophy has evolved from a simple flat network to a robust, secure, and highly-managed infrastructure. It leverages enterprise-level concepts like virtualization, network segmentation (VLANs), and centralized management to create a powerful and flexible environment for self-hosting and experimentation.
 
-## Overview
+The core of the network is built on the Ubiquiti UniFi platform, providing granular control over traffic, while services are logically separated and managed across two physical servers using Proxmox VE and Docker.
 
-This document outlines the current logical architecture of my home lab network. The design philosophy is to centralize network control using powerful software, compensating for the limitations of consumer-grade hardware.
+✨ Key Architectural Advantages
+This new design provides significant improvements in security, performance, and manageability:
 
-The network is currently a simple, flat structure, but core services like IP address assignment (DHCP) and name resolution (DNS) have been delegated from the ISP router to a dedicated server. This provides granular control, enhanced security, and network-wide ad-blocking.
+Virtualization with Proxmox: Workloads are isolated into dedicated Virtual Machines (e.g., vm-docker-main for AI, vm-docker-network for network services). This prevents a single application failure from impacting the entire system and allows for efficient resource allocation and snapshot-based backups.
 
-## Logical Diagram
+Centralized Container Management: Portainer provides a single web interface to manage all three Docker environments across two physical machines. This simplifies deployment, monitoring, and maintenance of containerized services.
 
-The diagram below illustrates the flow of network services. The ISP router now functions primarily as a modem and gateway, while the `jupiter` node handles all DHCP and DNS requests.
+Dedicated UniFi Network Stack: Replacing the ISP router with a UniFi Gateway, Switch, and AP provides full control over the network. This enables advanced firewalling, secure VPN access via WireGuard, and the implementation of VLANs.
 
-```mermaid
+Purpose-Built Servers: The architecture uses a powerful Primary Server for resource-intensive tasks like running AI models and a Low-Power Secondary Server for essential 24/7 services like Home Assistant and the UniFi Controller, optimizing performance and energy consumption.
+
+Diagram
+This diagram illustrates the multi-server architecture and the flow of management and network traffic.
+
+
 graph TD
     subgraph "Internet"
-        UpstreamDNS[("Upstream DNS<br>e.g., Quad9 / Google")]
+        ISP_Modem("ISP Modem (Bridge Mode)")
     end
 
-    subgraph "Home Network"
-        ISP[("ISP Modem/Router<br>Gateway: 192.168.1.1<br>DHCP Server: DISABLED")]
-        
-        subgraph "jupiter (Core Services Node)"
-            AGH["🛡️ AdGuard Home<br>IP: 192.168.1.2<br>DHCP & DNS Server"]
-        end
-
-        subgraph "Clients"
-            Client1["💻 mercury (Wi-Fi)"]
-            Client2["📱 Phone (Wi-Fi)"]
-            Client3["🖥️ PC (Ethernet)"]
-        end
-
-        ISP <--> Internet
-        AGH -- "Forwards valid DNS queries" --> UpstreamDNS
-        
-        Clients -- "1. DHCP Request" --> AGH
-        AGH -- "2. DHCP Lease (IP, Gateway, DNS)" --> Clients
-        Clients -- "3. DNS Query (e.g., google.com)" --> AGH
-        
-        Clients -- "4. HTTP/S Traffic" --> ISP
+    subgraph "Networking - UniFi Stack"
+        UGW["UniFi Gateway Lite (Router/Firewall/VPN)"]
+        SW["Network Switch"]
+        AP["UniFi AP7 Lite (Wi-Fi 7)"]
     end
 
-    style jupiter fill:#D5F5E3,stroke:#333,stroke-width:2px
-```
+    subgraph "Primary Server (Proxmox VE)"
+        PVE("Proxmox Host")
+        subgraph "VM: vm-docker-main"
+            DockerMain["Docker"]
+            PortainerServer("Portainer Server")
+            Ollama("Ollama")
+            OpenWebUI("Open WebUI")
+        end
+        subgraph "VM: vm-docker-network"
+            DockerNet["Docker"]
+            AdGuard("AdGuard Home")
+            AgentNet("Portainer Agent")
+        end
+    end
 
-## IP Addressing Scheme
+    subgraph "Secondary Server (Low Power)"
+        DebianServer("Physical Debian Host")
+        DockerLP["Docker"]
+        HA("Home Assistant")
+        UniFiCtrl("UniFi Controller")
+        AgentLP("Portainer Agent")
+    end
 
-| Parameter       | Value             | Notes                                           |
-| --------------- | ----------------- | ----------------------------------------------- |
-| **Network ID** | `192.168.1.0/24`    | A standard Class C private network.             |
-| **Gateway** | `192.168.1.1`       | The IP address of the ISP Modem/Router.         |
-| **DHCP Server** | `192.168.1.2`       | Handled by AdGuard Home on the `jupiter` node.  |
-| **DNS Server** | `192.168.1.2`       | Handled by AdGuard Home on the `jupiter` node.  |
-| **DHCP Pool** | `192.168.1.100` - `192.168.1.200` | Range of dynamic IPs assigned to clients. |
+    ISP_Modem -- "WAN" --> UGW
+    UGW -- "LAN" --> SW
+    SW --> PVE
+    SW --> DebianServer
+    SW --> AP
 
+    PVE --> vm-docker-main
+    PVE --> vm-docker-network
 
-## Core Component Roles
+    PortainerServer -- "Manages" --> DockerMain
+    PortainerServer -- "Manages" --> DockerNet
+    PortainerServer -- "Manages" --> AgentLP
+    
+🔒 Network Segmentation & Security
+The network is divided into four distinct VLANs, each with a specific purpose and strict firewall rules to control access and enhance security.
 
-### ISP Modem/Router
-While it remains the physical gateway to the internet, its software role has been intentionally minimized.
-* **DHCP Server:** The built-in DHCP server has been **disabled**.
-* **DNS Forwarder:** The built-in DNS forwarder is no longer used by clients.
-* **Current Function:** It acts as a modem, a simple L3 router (to perform NAT), and a Wi-Fi Access Point.
+Network Name
 
-### AdGuard Home on `jupiter`
-This container is the brain of the network. It runs on the `jupiter` node, which has a static IP (`192.168.1.2`) and a wired connection for maximum stability.
-* **DHCP Server:** Assigns IP addresses to all connecting clients. This centralization ensures that every device on the network is configured correctly without manual intervention.
-* **DNS Resolver & Blocker:** All DNS queries are sent here first. It checks queries against blocklists to prevent ads and trackers from ever loading. Legitimate queries are forwarded to an upstream DNS provider (e.g., Quad9 for security).
-* **SafeSearch Enforcement:** AdGuard Home is configured to enforce SafeSearch on major search engines (Google, Bing, etc.) for all devices on the network, providing a layer of content filtering.
+VLAN ID
 
-## Traffic Flow Example (New Client)
+Subnet
 
-1.  A new device (e.g., a phone) connects to the Wi-Fi.
-2.  The phone broadcasts a **DHCP Discover** message to find a DHCP server.
-3.  The ISP router ignores the request.
-4.  AdGuard Home on `jupiter` receives the broadcast and replies with a **DHCP Offer**, suggesting an IP address (`192.168.1.123`), the gateway (`192.168.1.1`), and itself as the DNS server (`192.168.1.2`).
-5.  The client accepts the offer, completing the lease process. It is now on the network.
-6.  When the user opens a browser to `example.com`, the phone sends a DNS query for `example.com` to `192.168.1.2`.
-7.  AdGuard Home filters the query, finds it to be safe, and forwards the traffic to the internet.
+Purpose & Key Firewall Rules
 
-## Current Limitations & Future Improvements
+Prod (Servers)
 
-* **Single Point of Failure:** The biggest weakness of this design is that if the `jupiter` node goes down, the entire network loses DNS resolution and new devices cannot obtain an IP lease.
-    * **Improvement:** Implement a high-availability (HA) DNS/DHCP setup. This can be achieved by setting up a second, synchronized AdGuard Home instance on another low-power device (like a Raspberry Pi) and using a tool like `keepalived` to manage a virtual IP.
+10
 
-* **Flat Network:** All devices—servers, user laptops, IoT gadgets—exist on the same logical network. This is not ideal for security.
-    * **Improvement:** As outlined in the roadmap, the next major step is to introduce a managed switch and create multiple **VLANs** to isolate server traffic, IoT traffic, and user traffic from one another.
+.../27
 
-* **Reliance on ISP Router:** The network still depends on the ISP router for L3 routing and Wi-Fi. These devices are often unreliable and lack advanced features.
-    * **Improvement:** Replace the ISP device with a dedicated router running professional-grade firmware like **pfSense** or **OPNsense**. This would offer robust firewalling, VPN capabilities, and more reliable performance.
+For core infrastructure (Proxmox, VMs). Highly restricted access from other VLANs.
+
+Cacau (Trusted)
+
+20
+
+.../27
+
+For trusted family devices. Can access: Home Assistant (Port 8123) and Open WebUI.
+
+Mochi (Guest)
+
+30
+
+.../28
+
+For guests. Provides internet access only. Blocked from all local network resources.
+
+IoT (Untrusted)
+
+40
+
+.../25
+
+For IoT devices. Isolated, cannot initiate contact with other VLANs. Can be accessed by Home Assistant.
+
+🚦 Example Traffic Flow
+Here’s how a request from a trusted device to a self-hosted service works in this architecture:
+
+A user on their laptop (connected to the "Cacau" Wi-Fi network, VLAN 20) opens a browser to the Open WebUI address.
+
+The request travels from the laptop to the UniFi AP.
+
+The AP tags the traffic for VLAN 20 and sends it to the UniFi Switch.
+
+The Switch forwards the request to the UniFi Gateway.
+
+The Gateway's firewall rules check if VLAN 20 is allowed to access the IP of the OpenWebUI service on the "Prod" network (VLAN 10). The rule allows this specific traffic.
+
+The Gateway routes the request to the Proxmox Host, which passes it to the vm-docker-main VM.
+
+The Docker container for Open WebUI receives the request and serves the webpage back along the same path.
+
+🚀 Future Improvements
+With the foundational architecture in place, future enhancements will focus on automation and deeper observability:
+
+High Availability (HA): Deploy a second instance of AdGuard Home on the secondary server and configure them for HA to eliminate DNS as a single point of failure.
+
+Infrastructure as Code (IaC): Use Ansible to automate the setup and configuration of new VMs and Docker hosts, ensuring consistency and repeatability.
+
+Monitoring & Logging: Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for in-depth monitoring and alerting.

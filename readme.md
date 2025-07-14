@@ -19,41 +19,78 @@ Coming from a 10-year background in audiovisual production, I believe in buildin
 
 ## 🏛️ Current Architecture
 
-The infrastructure is intentionally simple, built on repurposed hardware with a focus on energy efficiency.
+The infrastructure follows a professional-grade home lab setup, with proper network segmentation and virtualization.
 
 ```mermaid
 graph TD
-    subgraph "Local Network (192.168.1.0/24)"
-        direction LR
-        Router("🌐 ISP Modem/Router")
+subgraph "Internet"
+ISP_Modem("ISP Modem (Bridge Mode)")
+end
 
-        subgraph "AI Node (Surface Pro 4 | Wi-Fi)"
-            direction TB
-            DockerAI["🐳 Docker"]
-            Ollama["🤖 Ollama"]
-            OpenWebUI["💬 Open WebUI"]
-            LLM["🧠 Local LLM"]
-            DockerAI --> Ollama
-            DockerAI --> OpenWebUI
-            DockerAI --> LLM
-        end
+subgraph "Networking - UniFi Stack"
+UGW["UniFi Gateway Lite (Router/Firewall/VPN)"]
+SW["Network Switch"]
+AP["UniFi AP7 Lite (Wi-Fi 7)"]
+end
 
-        subgraph "Core Services Node (Dual-Core Notebook | Ethernet)"
-            direction TB
-            DockerCore["🐳 Docker"]
-            AdGuard["🛡️ AdGuard Home"]
-            HomeAssistant["🏠 Home Assistant"]
-            DockerCore --> AdGuard
-            DockerCore --> HomeAssistant
-        end
+subgraph "Servidor Principal (Proxmox VE)"
+PVE("Proxmox Host")
+subgraph "VM: vm-docker-main"
+DockerMain["Docker"]
+PortainerServer("Portainer Server")
+Ollama("Ollama")
+OpenWebUI("Open WebUI")
+LittleLLM("LittleLLM")
+end
+subgraph "VM: vm-docker-network"
+DockerNet["Docker"]
+AdGuard("AdGuard Home")
+AgentNet("Portainer Agent")
+end
+end
 
-        Router --> AI_Node
-        Router --> Core_Services_Node
-    end
+subgraph "Servidor Secundário (Low Power)"
+DebianServer("Physical Debian Host")
+DockerLP["Docker"]
+HA("Home Assistant")
+UniFiCtrl("UniFi Controller")
+AgentLP("Portainer Agent")
+end
 
-    style AI_Node fill:#D6EAF8,stroke:#333,stroke-width:2px
-    style Core_Services_Node fill:#D5F5E3,stroke:#333,stroke-width:2px
+ISP_Modem -- "WAN" --> UGW
+UGW -- "LAN" --> SW
+SW --> PVE
+SW --> DebianServer
+SW --> AP
+
+PVE --> vm-docker-main
+PVE --> vm-docker-network
+
+PortainerServer -- "Gerencia" --> DockerMain
+PortainerServer -- "Gerencia" --> DockerNet
+PortainerServer -- "Gerencia" --> DockerLP
 ```
+
+### Network Segmentation
+
+The network is divided into four distinct subnets, each with specific security policies:
+
+| Subnet | CIDR | Purpose | Access Rights |
+|--------|------|---------|---------------|
+| **prod** | /27 | Production infrastructure | Full access to all services |
+| **cacau** | /27 | Family network (medium security) | Access to OpenWebUI and Home Assistant |
+| **mochi** | /28 | Guest network | Internet only, no internal services |
+| **iot** | /25 | IoT devices | Restricted; only port 8223 accessible from prod network |
+
+### Hardware
+
+| Component | Specification | Function |
+|-----------|--------------|-----------|
+| **Main Server** | 12 Cores, 12 GB RAM | Proxmox VE host for main service VMs |
+| **Secondary Server** | Dual Core (Low Power) | Debian host for 24/7 low-demand services |
+| **Gateway/Firewall** | UniFi Gateway Lite | Router, Firewall, WireGuard VPN |
+| **Access Point** | UniFi AP7 Lite | Wi-Fi 7, guest network, security management |
+| **Switch** | Network backbone | Local network connectivity |
 *For a more detailed overview, see the [Hardware & Network Documentation](./docs/hardware.md).*
 
 ### Hardware
@@ -61,49 +98,57 @@ graph TD
 * **AI Node (`mercury`):** A Microsoft Surface Pro 4 serving as an experimentation server for AI/ML models.
 * **Core Services Node (`jupiter`):** A generic dual-core notebook running critical, always-on services.
 
-### Software Stack
+### Software & Virtualization Stack
 
-* **OS:** Debian 12 (with a custom kernel for the Surface hardware)
-* **Containerization:** Docker & Docker Compose
-* **DNS & Security:** AdGuard Home
-* **AI & LLMs:** Ollama, Open WebUI
-* **Automation:** Home Assistant
+| Technology | Description |
+|------------|-------------|
+| **Hypervisor** | Proxmox VE - Installed on main server for VM management |
+| **Operating System** | Debian - Base OS for secondary server and all VMs |
+| **Containerization** | Docker - Used across all hosts to isolate and run services |
+| **Management** | Portainer - Centralized management of 3 Docker environments (2 VMs + 1 physical host) |
+| **Network** | UniFi Network - UniFi Controller manages Gateway and AP for complete network control |
 
 ---
 
 ## 🛠️ Services
 
-This lab is composed of two main stacks, each running on a dedicated node. The services are deployed using Docker Compose, with separate configurations for each stack.
+This lab consists of three main service stacks distributed across virtual machines and physical hosts, all managed through Portainer for centralized control.
 
-### Core Infrastructure (`jupiter` node)
+### AI and Management Stack (`vm-docker-main`)
 
-These are the foundational, always-on services that manage the network and home automation. They are defined in `services/core-infra/docker-compose.yml`.
+This VM hosts the AI services and central management tools. Configuration is defined in `services/ai-stack/docker-compose.yml`.
 
-| Service          | Purpose                                               |
-| ---------------- | ----------------------------------------------------- |
-| **AdGuard Home** | Network-wide ad-blocker and secure DNS resolver.      |
-| **Home Assistant** | Orchestrator for home automation and task scheduling. |
+| Service | Purpose | Network Access |
+|---------|---------|----------------|
+| **Portainer Server** | Central container management hub | prod only |
+| **Ollama** | Local LLM execution engine | prod, cacau |
+| **Open WebUI** | Web interface for Ollama models | prod, cacau |
+| **LittleLLM** | API key and model access management | prod only |
 
+### Network Services (`vm-docker-network`)
 
+This VM handles network-level services. Configuration is in `services/network-services/docker-compose.yml`.
 
-### AI Stack (`mercury` node)
+| Service | Purpose | Network Access |
+|---------|---------|----------------|
+| **AdGuard Home** | DNS-level ad/tracker blocking | prod only |
+| **Portainer Agent** | Remote management endpoint | prod only |
 
-This stack is dedicated to experimenting with local Large Language Models (LLMs) and related tools. It is defined in `services/ai-stack/docker-compose.yml`.
+### Home Automation Stack (Physical Server)
 
-| Service          | Purpose                                               |
-| ---------------- | ----------------------------------------------------- |
-| **Ollama**       | Framework for serving local language models (LLMs).   |
-| **Open WebUI**   | User-friendly chat interface for the LLMs.            |
-| **LiteLLM**      | API proxy to manage keys and standardize model access.|
+Running on the low-power physical server, these services manage home automation and network control. Configuration in `services/home-automation/docker-compose.yml`.
+
+| Service | Purpose | Network Access |
+|---------|---------|----------------|
+| **Home Assistant** | Home automation orchestrator | prod, cacau, iot (8223) |
+| **UniFi Controller** | Network device management | prod only |
+| **Portainer Agent** | Remote management endpoint | prod only |
 
 
 ## 🗺️ Future Roadmap
 
 This project is just the beginning. The next planned steps are:
 
-
--   [ ] **Network Segmentation:** Create VLANs to isolate infrastructure, IoT devices, and the main user network for enhanced security.
--   [ ] **Dedicated Server:** Migrate services to a more robust server (e.g., a mini PC) running Proxmox VE for better virtualization and resource management.
 -   [ ] **Monitoring:** Implement a Prometheus & Grafana stack for visibility into the lab's health and performance metrics.
 -   [ ] **IaC with Ansible:** Automate the base configuration (package installation, Docker setup, security hardening) of all nodes.
 
