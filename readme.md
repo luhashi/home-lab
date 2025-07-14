@@ -1,228 +1,112 @@
-# 🏠 Home Lab Setup Guide
+# 🚀 My Home Lab: From Videomaker to AI/DevOps Engineer
 
-This guide documents my personal home lab setup, following the exact installation order I used to set up my environment.
+![Debian](https://img.shields.io/badge/Debian-A81D33?style=for-the-badge&logo=debian&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Home%20Assistant](https://img.shields.io/badge/Home%20Assistant-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)
 
-## 🖥️ Prerequisites
+Welcome to my home lab repository! This project serves as my personal proving ground and portfolio, documenting my career transition journey into the world of tech, with a focus on **DevOps** and **AI Engineering**.
 
-- A server or PC running Ubuntu with XFCE
-- Internet connection
-- Basic terminal knowledge
+## 🎯 Guiding Principles
 
-## 🔄 System Setup
+Coming from a 10-year background in audiovisual production, I believe in building robust solutions by blending creativity with technical efficiency. This lab is:
 
-### 1. Initial Ubuntu Setup
+* **Practical:** Everything here runs on real hardware, solving everyday problems and serving real purposes.
+* **Evolving:** It started simple and is constantly improving, with a clear roadmap for automation and scalability.
+* **Documented:** I believe clear documentation is the foundation of any sustainable and collaborative project.
 
-1. Install Ubuntu Server with XFCE desktop environment
-2. Update and upgrade system packages:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-3. Install essential tools:
-   ```bash
-   sudo apt install -y git curl wget nano
-   ```
+---
 
-### 2. Install Docker
+## 🏛️ Current Architecture
 
-1. Install required packages:
-   ```bash
-   sudo apt-get install -y \
-       apt-transport-https \
-       ca-certificates \
-       curl \
-       gnupg \
-       lsb-release
-   ```
+The infrastructure is intentionally simple, built on repurposed hardware with a focus on energy efficiency.
 
-2. Add Docker's official GPG key:
-   ```bash
-   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-   ```
+```mermaid
+graph TD
+    subgraph "Local Network (192.168.1.0/24)"
+        direction LR
+        Router("🌐 ISP Modem/Router")
 
-3. Set up the stable repository:
-   ```bash
-   echo \
-     "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-     $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-   ```
+        subgraph "AI Node (Surface Pro 4 | Wi-Fi)"
+            direction TB
+            DockerAI["🐳 Docker"]
+            Ollama["🤖 Ollama"]
+            OpenWebUI["💬 Open WebUI"]
+            LLM["🧠 Local LLM"]
+            DockerAI --> Ollama
+            DockerAI --> OpenWebUI
+            DockerAI --> LLM
+        end
 
-4. Install Docker Engine:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-   ```
+        subgraph "Core Services Node (Dual-Core Notebook | Ethernet)"
+            direction TB
+            DockerCore["🐳 Docker"]
+            AdGuard["🛡️ AdGuard Home"]
+            HomeAssistant["🏠 Home Assistant"]
+            DockerCore --> AdGuard
+            DockerCore --> HomeAssistant
+        end
 
-5. Add your user to the docker group:
-   ```bash
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
+        Router --> AI_Node
+        Router --> Core_Services_Node
+    end
 
-6. Verify installation:
-   ```bash
-   docker --version
-   docker run hello-world
-   ```
-
-## 🏠 Home Assistant Installation
-
-1. Install required dependencies:
-   ```bash
-   sudo apt-get install -y \
-       apparmor \
-       jq \
-       network-manager \
-       socat \
-       software-properties-common
-   ```
-
-2. Install OS Agent:
-   ```bash
-   wget https://github.com/home-assistant/os-agent/releases/download/1.6.0/os-agent_1.6.0_linux_x86_64.deb
-   sudo dpkg -i os-agent_1.6.0_linux_x86_64.deb
-   ```
-
-3. Install Home Assistant Supervisor:
-   ```bash
-   wget https://github.com/home-assistant/supervised-installer/releases/latest/download/homeassistant-supervised.deb
-   sudo dpkg -i homeassistant-supervised.deb
-   ```
-
-4. Access Home Assistant at: `http://your-server-ip:8123`
-
-## 🤖 LittleLLM Setup
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/BerriAI/littlellm
-   cd littlellm
-   ```
-
-2. Create and edit the .env file:
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
-
-3. Generate secure random strings and update:
-   ```
-   LITELLM_MASTER_KEY="sk-$(openssl rand -hex 16)"
-   LITELLM_SALT_KEY="sk-$(openssl rand -hex 16)"
-   ```
-
-4. Start the services:
-   ```bash
-   sudo docker compose up -d
-   ```
-
-5. Access the dashboard at: `http://your-server-ip:3000`
-   - Username: admin
-   - Password: Your LITELLM_MASTER_KEY without the "sk-" prefix
-
-## 🦙 Ollama Setup
-
-1. Pull and run Ollama container:
-   ```bash
-   docker run -d \
-     --name ollama \
-     -p 11434:11434 \
-     -v ollama:/root/.ollama \
-     --restart always \
-     ollama/ollama
-   ```
-
-2. Pull a model (example with llama2):
-   ```bash
-   docker exec ollama ollama pull llama2
-   ```
-
-3. Verify the installation:
-   ```bash
-   docker exec ollama ollama list
-   ```
-
-## 🌐 Open WebUI Setup
-
-1. Run Open WebUI container:
-   ```bash
-   docker run -d \
-     -p 3000:8080 \
-     -v open-webui:/app/backend/data \
-     -e OLLAMA_BASE_URL=http://your-server-ip:11434 \
-     --name open-webui \
-     --restart always \
-     ghcr.io/open-webui/open-webui:main
-   ```
-
-2. Access Open WebUI at: `http://your-server-ip:3000`
-
-## 🪞 Magic Mirror Setup (Optional)
-
-1. Install dependencies:
-   ```bash
-   curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-   sudo apt install -y nodejs
-   ```
-
-2. Install MagicMirror:
-   ```bash
-   bash -c "$(curl -sL https://raw.githubusercontent.com/MichMich/MagicMirror/master/installers/raspberry.sh)"
-   ```
-
-3. Configure MagicMirror:
-   ```bash
-   cd ~/MagicMirror
-   cp config/config.js.sample config/config.js
-   nano config/config.js
-   ```
-
-4. Start MagicMirror:
-   ```bash
-   cd ~/MagicMirror
-   npm run start
-   ```
-
-## 🔄 Maintenance
-
-### Update All Services
-
-```bash
-# Update Docker containers
-cd ~/littlellm
-docker compose pull
-docker compose up -d
-
-docker pull ollama/ollama:latest
-docker pull ghcr.io/open-webui/open-webui:main
-
-# Restart all services
-docker restart ollama open-webui
+    style AI_Node fill:#D6EAF8,stroke:#333,stroke-width:2px
+    style Core_Services_Node fill:#D5F5E3,stroke:#333,stroke-width:2px
 ```
+*For a more detailed overview, see the [Hardware & Network Documentation](./docs/hardware.md).*
 
-### Backup Configuration
+### Hardware
 
-```bash
-# Create backup directory
-mkdir -p ~/backups/$(date +%Y%m%d)
+* **AI Node (`mercury`):** A Microsoft Surface Pro 4 serving as an experimentation server for AI/ML models.
+* **Core Services Node (`jupiter`):** A generic dual-core notebook running critical, always-on services.
 
-# Backup Docker volumes
-docker run --rm -v ~/backups/$(date +%Y%m%d):/backup -v ollama:/source busybox tar czf /backup/ollama_backup_$(date +%Y%m%d).tar.gz -C /source .
-docker run --rm -v ~/backups/$(date +%Y%m%d):/backup -v open-webui:/source busybox tar czf /backup/openwebui_backup_$(date +%Y%m%d).tar.gz -C /source .
+### Software Stack
 
-# Backup Home Assistant configuration
-sudo tar czf ~/backups/$(date +%Y%m%d)/homeassistant_backup_$(date +%Y%m%d).tar.gz /usr/share/hassio/homeassistant/
-```
+* **OS:** Debian 12 (with a custom kernel for the Surface hardware)
+* **Containerization:** Docker & Docker Compose
+* **DNS & Security:** AdGuard Home
+* **AI & LLMs:** Ollama, Open WebUI
+* **Automation:** Home Assistant
 
-## 📝 Notes
+---
 
-- Replace `your-server-ip` with your actual server IP address
-- Ensure ports 3000, 8123, and 11434 are open in your firewall
-- For production use, consider setting up HTTPS with a reverse proxy like Nginx
+## 🛠️ Services
 
-## 🤝 Contributing
+This lab is composed of two main stacks, each running on a dedicated node. The services are deployed using Docker Compose, with separate configurations for each stack.
 
-Feel free to submit issues and enhancement requests.
+### Core Infrastructure (`jupiter` node)
 
-## 📄 License
+These are the foundational, always-on services that manage the network and home automation. They are defined in `services/core-infra/docker-compose.yml`.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+| Service          | Purpose                                               |
+| ---------------- | ----------------------------------------------------- |
+| **AdGuard Home** | Network-wide ad-blocker and secure DNS resolver.      |
+| **Home Assistant** | Orchestrator for home automation and task scheduling. |
+
+
+
+### AI Stack (`mercury` node)
+
+This stack is dedicated to experimenting with local Large Language Models (LLMs) and related tools. It is defined in `services/ai-stack/docker-compose.yml`.
+
+| Service          | Purpose                                               |
+| ---------------- | ----------------------------------------------------- |
+| **Ollama**       | Framework for serving local language models (LLMs).   |
+| **Open WebUI**   | User-friendly chat interface for the LLMs.            |
+| **LiteLLM**      | API proxy to manage keys and standardize model access.|
+
+
+## 🗺️ Future Roadmap
+
+This project is just the beginning. The next planned steps are:
+
+
+-   [ ] **Network Segmentation:** Create VLANs to isolate infrastructure, IoT devices, and the main user network for enhanced security.
+-   [ ] **Dedicated Server:** Migrate services to a more robust server (e.g., a mini PC) running Proxmox VE for better virtualization and resource management.
+-   [ ] **Monitoring:** Implement a Prometheus & Grafana stack for visibility into the lab's health and performance metrics.
+-   [ ] **IaC with Ansible:** Automate the base configuration (package installation, Docker setup, security hardening) of all nodes.
+
+---
+
+Thanks for stopping by! Feel free to explore the repository and its documentation.
