@@ -78,8 +78,7 @@ graph TD
     PortainerServer -- "Manages" --> DockerMain
     PortainerServer -- "Manages" --> DockerNet
     PortainerServer -- "Manages" --> DockerLP
-
-🔒 Network Segmentation & Security (VLANs)
+## 🔒 Network Segmentation & Security (VLANs)
 The network is divided into four distinct VLANs, each with a specific purpose and strict firewall policies to control access and enhance security.
 
 Network Name
