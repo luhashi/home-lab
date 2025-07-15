@@ -1,3 +1,4 @@
+Markdown
 # 🚀 Home Lab Network Architecture
 ![Proxmox](https://img.shields.io/badge/Proxmox-E52F5A?style=for-the-badge&logo=proxmox&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian-A81D33?style=for-the-badge&logo=debian&logoColor=white)
@@ -78,7 +79,8 @@ graph TD
     PortainerServer -- "Manages" --> DockerMain
     PortainerServer -- "Manages" --> DockerNet
     PortainerServer -- "Manages" --> DockerLP
-## 🔒 Network Segmentation & Security (VLANs)
+    
+🔒 Network Segmentation & Security (VLANs)
 The network is divided into four distinct VLANs, each with a specific purpose and strict firewall policies to control access and enhance security.
 
 Network Name
@@ -145,4 +147,4 @@ With the foundational architecture established, future improvements will focus o
 
 [ ] Infrastructure as Code (IaC): Use Ansible to automate the setup and configuration of new VMs and Docker hosts, ensuring consistency and repeatability.
 
-[ ] Monitoring & Logging: Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for detailed monitoring and alerting.    
+[ ] Monitoring & Logging: Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for detailed monitoring and alerting.
