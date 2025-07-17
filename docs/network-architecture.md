@@ -1,134 +1,154 @@
 # 🚀 Home Lab Network Architecture
 
-This document details the network architecture of my home lab. The project has evolved from a simple flat network into a robust and secure infrastructure, adopting professional-grade concepts to ensure performance and simplified management.
+This document details the network architecture of my home lab. The project has evolved from a simple flat network into a robust Zero Trust infrastructure, combining traditional network segmentation with modern cloud security principles.
 
 ## 🎯 Design Philosophy
 
-The network philosophy is based on three pillars:
+The network philosophy is built on four fundamental pillars:
 
 **Security by Isolation:** Implementing network segmentation (VLANs) to isolate different types of traffic, minimizing the attack surface and protecting critical services.
 
-**Centralized Control:** Utilizing the UniFi platform to manage all network hardware from a single interface, allowing for unified firewall policy enforcement and traffic monitoring.
+**Zero Trust Security:** Adopting a "never trust, always verify" model where no access is trusted by default. Every request, whether internal or external, must be authenticated and authorized before reaching any resource.
 
-**High Performance:** Employing dedicated network hardware to ensure stable connectivity, low latency, and capacity for future expansions.
+**Centralized Control:** Utilizing unified platforms (UniFi for networking, Cloudflare for security) to manage infrastructure from centralized interfaces, enabling consistent policy enforcement and comprehensive monitoring.
+
+**High Performance:** Employing dedicated network hardware and modern edge services to ensure stable connectivity, low latency, and capacity for future expansions.
 
 ## ✨ Key Architectural Advantages
 
-This new design offers significant improvements in security, performance, and manageability:
+This evolved design offers significant improvements in security, performance, and manageability:
 
-**Virtualization with Proxmox:** Workloads are isolated into dedicated Virtual Machines. This prevents a single application failure from impacting the entire system and allows for efficient resource allocation.
+**Zero Trust Access:** Replacing traditional VPN access with Cloudflare's Zero Trust platform eliminates exposed ports and provides identity-based access control for all external connections.
 
-**Centralized Management with Portainer:** A single web interface manages all three Docker environments, simplifying the deployment, monitoring, and maintenance of containerized services.
+**Multi-Layer Security:** Combining edge security (Cloudflare WAF), identity verification (SSO), and network segmentation (VLANs) creates a defense-in-depth strategy.
 
-**Dedicated UniFi Network Stack:** Replacing the ISP router with a UniFi Gateway, Switch, and AP provides full control, enabling advanced firewalling, secure VPN, and VLAN implementation.
+**Unified Traffic Control:** All traffic, both internal and external, flows through a centralized reverse proxy (Nginx Proxy Manager), ensuring consistent policy application.
 
-**Purpose-Built Servers:** The architecture uses a powerful server for heavy tasks (AI) and a low-power server for essential 24/7 services (home automation and network control), optimizing the performance-to-cost ratio.
+**Smart DNS Resolution:** Split-horizon DNS provides seamless access to services using different domains for internal (`*.local.example.com`) and external (`*.example.com`) users.
+
+## 🌟 Evolution to Zero Trust
+
+### The Initial Challenge
+While the traditional network design with VLANs provided strong internal segmentation, external access remained a concern. The conventional approach of port forwarding or VPN servers created unnecessary exposure to the public internet and relied heavily on perimeter security.
+
+### The Strategic Shift
+The transition to a Zero Trust architecture addressed these limitations by implementing the principle of "never trust, always verify." By leveraging Cloudflare's edge network and Zero Trust platform, we eliminated all inbound firewall rules and moved authentication decisions to the edge, before traffic ever reaches our network.
+
+### Technology Choices
+Key components were carefully selected to create a seamless and secure access experience:
+- **Cloudflare Tunnel:** Creates a secure, outbound-only connection that eliminates the need for exposed ports
+- **Cloudflare Access:** Provides identity-aware proxying with SSO support, ensuring every request is authenticated
+- **Nginx Proxy Manager:** Acts as the central traffic controller for both internal and external requests
+- **AdGuard Home:** Enables split-horizon DNS for intelligent request routing
 
 ## 🏛️ Architecture Diagram
 
-The diagram below illustrates the multi-server topology and network traffic flow.
+The diagram below illustrates our multi-layered architecture, showing both the Zero Trust external access path and internal network segmentation:
 
 ```mermaid
 graph TD
-    subgraph "Internet"
-        ISP_Modem("ISP Modem<br/>(Bridge Mode)")
+    subgraph "External User (Internet)"
+        User_External["🌍 External User"]
     end
 
-    subgraph "Networking - UniFi Stack"
-        UGW["UniFi Gateway Lite<br/>(Router/Firewall/VPN)"]
-        SW["Network Switch"]
-        AP["UniFi AP7 Lite<br/>(Wi-Fi 7)"]
+    subgraph "Cloudflare Network (Zero Trust Perimeter)"
+        CF_WAF["🛡️ WAF & Geo-Fence"]
+        CF_Access["🔐 Access (SSO Login)"]
+        CF_Tunnel["🔗 Secure Tunnel"]
+        style CF_WAF fill:#f38020,stroke:#333,stroke-width:2px
+        style CF_Access fill:#f38020,stroke:#333,stroke-width:2px
+        style CF_Tunnel fill:#f38020,stroke:#333,stroke-width:2px
     end
 
-    subgraph "Primary Server (Proxmox VE)"
-        PVE("Proxmox Host")
-        subgraph "VM: vm-docker-main"
-            DockerMain["Docker"]
-            PortainerServer("Portainer Server")
-            Ollama("Ollama")
-            OpenWebUI("Open WebUI")
+    subgraph "Local Network (Homelab)"
+        subgraph "Gateway & DNS"
+            UGW["UniFi Gateway Lite<br/>(Internal Firewall)"]
+            AdGuard["🌐 AdGuard Home<br/>(Internal DNS)"]
         end
-        subgraph "VM: vm-docker-network"
-            DockerNet["Docker"]
-            AdGuard("AdGuard Home")
-            AgentNet("Portainer Agent")
+        subgraph "Ingress & Management"
+            Cloudflared["🛰️ cloudflared<br/>(Tunnel Agent)"]
+            NPM["🚦 Nginx Proxy Manager<br/>(Reverse Proxy)"]
         end
+        subgraph "Services"
+            HA["Home Assistant"]
+            WebUI["OpenWebUI"]
+            OtherServices["..."]
+        end
+        User_Internal["💻 Internal User / VPN"]
     end
 
-    subgraph "Secondary Server (Low Power)"
-        DebianServer("Physical Debian Host")
-        DockerLP["Docker"]
-        HA("Home Assistant")
-        UniFiCtrl("UniFi Controller")
-        AgentLP("Portainer Agent")
-    end
+    User_External -- "1. https://service.example.com" --> CF_WAF
+    CF_WAF --> CF_Access
+    CF_Access --> CF_Tunnel
+    CF_Tunnel --> Cloudflared
+    
+    Cloudflared -- "2. Forwards all public traffic to" --> NPM
+    
+    User_Internal -- "A. https://service.lab.example.com" --> AdGuard
+    AdGuard -- "B. Replies with NPM's internal IP" --> User_Internal
+    User_Internal -- "C. Connects directly to" --> NPM
+    
+    NPM -- "3. Routes request to correct service" --> HA
+    NPM -- " " --> WebUI
+    NPM -- " " --> OtherServices
 
-    subgraph "VLANs"
-        VLAN10["VLAN 10 - Prod<br/>(Servers)"]
-        VLAN20["VLAN 20 - Cacau<br/>(Trusted)"]
-        VLAN30["VLAN 30 - Mochi<br/>(Guest)"]
-        VLAN40["VLAN 40 - IoT<br/>(Untrusted)"]
-    end
-
-    ISP_Modem --> UGW
-    UGW --> SW
-    SW --> PVE
-    SW --> DebianServer
-    SW --> AP
-
-    PVE --> vm-docker-main
-    PVE --> vm-docker-network
-
-    PortainerServer -.-> DockerMain
-    PortainerServer -.-> DockerNet
-    PortainerServer -.-> DockerLP
-
-    UGW --> VLAN10
-    UGW --> VLAN20
-    UGW --> VLAN30
-    UGW --> VLAN40
-
-    style VLAN10 fill:#ff6b6b
-    style VLAN20 fill:#4ecdc4
-    style VLAN30 fill:#45b7d1
-    style VLAN40 fill:#f9ca24
+    UGW -.-> UGW_Firewall_Rule(Firewall Rule<br>Block Direct IP Access)
+    style UGW_Firewall_Rule fill:#e74c3c,color:#fff
 ```
 
 ## 🔒 Network Segmentation & Security (VLANs)
 
-The network is divided into four distinct VLANs, each with a specific purpose and strict firewall policies to control access and enhance security.
+The network maintains strict internal segmentation through VLANs, each with specific security policies:
 
 | Network Name | VLAN ID | Subnet | Purpose & Key Firewall Rules |
 |--------------|---------|--------|------------------------------|
-| Prod (Servers) | 10 | .../27 | For core infrastructure (Proxmox, VMs). Highly restricted access from other VLANs. |
-| Cacau (Trusted) | 20 | .../27 | For trusted family devices. Can access: Home Assistant (Port 8123) and Open WebUI. |
-| Mochi (Guest) | 30 | .../28 | For guests. Provides internet access only. Blocked from all local network resources. |
-| IoT (Untrusted) | 40 | .../25 | For IoT devices. Isolated, cannot initiate contact with other VLANs. Can be accessed by Home Assistant. |
+| Prod (Servers) | 10 | .../27 | For core infrastructure. Access restricted to NPM for service routing. |
+| Cacau (Trusted) | 20 | .../27 | For trusted family devices. Access to authorized services via NPM only. |
+| Mochi (Guest) | 30 | .../28 | Guest network with internet-only access. All local resources blocked. |
+| IoT (Untrusted) | 40 | .../25 | IoT devices isolated. Can only communicate with Home Assistant. |
 
-## 🚦 Example Traffic Flow
+## 🔐 Perimeter & Application Security (Zero Trust Layers)
 
-Here's how a request from a trusted device to a self-hosted service works in this architecture:
+Our Zero Trust implementation consists of multiple coordinated security layers:
 
-1. A user on their laptop (connected to the "Cacau" Wi-Fi network, VLAN 20) accesses the Open WebUI address.
+* **✅ No Open Ports:** Cloudflare Tunnel creates an outbound-only connection to the Cloudflare edge, eliminating the need for inbound firewall rules and hiding our IP address.
 
-2. The request travels from the laptop to the UniFi AP.
+* **🔐 Identity-Aware Proxy:** Cloudflare Access authenticates every external request using SSO (Google/GitHub) before it reaches our network, ensuring only authorized users gain access.
 
-3. The AP tags the traffic for VLAN 20 and sends it to the UniFi Switch.
+* **🛡️ Edge Security:** Cloudflare WAF provides geographic restrictions and protection against common web vulnerabilities at the edge.
 
-4. The Switch forwards the request to the UniFi Gateway.
+* **🚦 Unified Access Control:** Nginx Proxy Manager acts as the central point of access control, handling both external (tunneled) and internal traffic with consistent routing rules.
 
-5. The Gateway's firewall rules check if VLAN 20 is allowed to access the IP of the OpenWebUI service on the "Prod" network (VLAN 10). The rule permits this specific traffic.
+* **🌐 Smart DNS Resolution:** Split-horizon DNS provides seamless access using different domains for internal (`*.lab.example.com`) and external (`*.example.com`) users.
 
-6. The Gateway routes the request to the Proxmox Host, which passes it to the vm-docker-main VM.
+* **🧱 Defense in Depth:** UniFi firewall rules block direct IP access to services, ensuring all traffic flows through proper security controls.
 
-7. The Open WebUI Docker container receives the request and serves the webpage back along the same path.
+## 🚦 Traffic Flow Examples
+
+### Internal Traffic Flow (VLAN-to-VLAN)
+
+1. A user on their laptop (connected to the "Cacau" Wi-Fi network, VLAN 20) accesses `https://webui.lab.example.com`
+2. AdGuard Home resolves the domain to NPM's internal IP
+3. The request travels through the UniFi AP, tagged for VLAN 20
+4. The UniFi Gateway permits the traffic based on VLAN rules
+5. NPM receives the request and routes it to the OpenWebUI container
+6. The response follows the same path back to the user
+
+### External Traffic Flow (Zero Trust Model)
+
+1. An external user accesses `https://webui.example.com`
+2. Cloudflare's WAF checks the request against security rules
+3. Cloudflare Access prompts for SSO authentication via Google/GitHub
+4. Upon successful authentication, the request is sent through the Cloudflare Tunnel
+5. The local cloudflared agent receives the request and forwards it to NPM
+6. NPM validates the request and routes it to the OpenWebUI container
+7. The response travels back through the same secure path
 
 ## 🚀 Future Roadmap
 
-With the foundational architecture established, future improvements will focus on automation and observability:
+With our Zero Trust foundation established, future improvements will focus on automation and observability:
 
-- [ ] **High Availability (HA):** Implement a second AdGuard Home instance on the secondary server and configure them for HA to eliminate DNS as a single point of failure.
-
-- [ ] **Infrastructure as Code (IaC):** Use Ansible to automate the setup and configuration of new VMs and Docker hosts, ensuring consistency and repeatability.
-
-- [ ] **Monitoring & Logging:** Implement a Prometheus and Grafana stack to collect metrics from all servers, VMs, and services for detailed monitoring and alerting.
+- [ ] **Security Information and Event Management (SIEM):** Implement centralized logging and security analytics
+- [ ] **Infrastructure as Code:** Automate the deployment of Zero Trust policies and network configurations
+- [ ] **Enhanced Monitoring:** Deploy Prometheus and Grafana for comprehensive infrastructure and security metrics
+- [ ] **Automated Compliance Checks:** Implement regular security posture assessments and compliance verification
